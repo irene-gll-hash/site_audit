@@ -1,13 +1,5 @@
-# env
 .env
-
-# python
 __pycache__/
 *.pyc
-
-# результаты
 *.xlsx
 *.csv
-
-# system
-.DS_Store
