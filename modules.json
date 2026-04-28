@@ -1,0 +1,133 @@
+{
+  "home": {
+    "name": "Главная",
+    "start_urls": [
+      "https://www.qifa.ru/"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/"
+    ],
+    "exact_urls_only": true
+  },
+
+  "full_site": {
+    "name": "Полный сайт",
+    "start_urls": [
+      "https://www.qifa.ru/"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/"
+    ]
+  },
+
+  "catalog": {
+    "name": "Каталог",
+    "start_urls": [
+      "https://www.qifa.ru/market/postavka-so-sklada-rf",
+      "https://www.qifa.ru/market/postavka-s-proizvodstva-knr"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/catalog",
+      "https://www.qifa.ru/chigoods",
+      "https://www.qifa.ru/market"
+    ]
+  },
+  "product": {
+    "name": "Карточки товаров",
+    "start_urls": [
+      "https://www.qifa.ru/chigoods"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/chigoods"
+    ]
+  },
+  "help": {
+    "name": "Помощь",
+    "start_urls": [
+      "https://www.qifa.ru/help"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/help"
+    ]
+  },
+  "news": {
+    "name": "Новости",
+    "start_urls": [
+      "https://www.qifa.ru/news"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/news"
+    ]
+  },
+  "blog": {
+    "name": "Блог",
+    "start_urls": [
+      "https://www.qifa.ru/article"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/article"
+    ]
+  },
+  "company": {
+    "name": "О компании",
+    "start_urls": [
+      "https://www.qifa.ru/o-kompanii",
+      "https://www.qifa.ru/platform"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/o-kompanii",
+      "https://www.qifa.ru/platform"
+    ]
+  },
+  "contacts": {
+    "name": "Контакты",
+    "start_urls": [
+      "https://www.qifa.ru/contacts"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/contacts"
+    ]
+  },
+  "legal": {
+    "name": "Юридические страницы",
+    "start_urls": [
+      "https://www.qifa.ru/confidentiality",
+      "https://www.qifa.ru/passport-license",
+      "https://www.qifa.ru/passport-privacy"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/confidentiality",
+      "https://www.qifa.ru/passport-license",
+      "https://www.qifa.ru/passport-privacy"
+    ]
+  },
+  "marketing": {
+    "name": "Маркетинг и лендинги",
+    "start_urls": [
+      "https://www.qifa.ru/"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/smart-delivery",
+      "https://www.qifa.ru/window_to_china",
+      "https://www.qifa.ru/market"
+    ]
+  },
+  "search": {
+    "name": "Поиск",
+    "start_urls": [
+      "https://www.qifa.ru/"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/search"
+    ]
+  },
+  "user": {
+    "name": "Личный кабинет",
+    "start_urls": [
+      "https://www.qifa.ru/member/login"
+    ],
+    "allowed_prefixes": [
+      "https://www.qifa.ru/member"
+    ]
+  }
+}

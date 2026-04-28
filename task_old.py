@@ -7,7 +7,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 import pandas as pd
@@ -17,11 +17,7 @@ from gigachat import GigaChat
 
 
 BASE_DIR = Path(__file__).resolve().parent
-MODULES_PATH = BASE_DIR / "modules.json"
-REPORTS_DIR = BASE_DIR / "reports"
-
 load_dotenv(BASE_DIR / ".env")
-
 
 GIGACHAT_CREDENTIALS = os.getenv("GIGACHAT_CREDENTIALS")
 GIGACHAT_SCOPE = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_B2B")
@@ -31,7 +27,6 @@ GIGACHAT_VERIFY_SSL = os.getenv("GIGACHAT_VERIFY_SSL", "false").lower() == "true
 if not GIGACHAT_CREDENTIALS:
     raise RuntimeError("GIGACHAT_CREDENTIALS is not set in .env")
 
-
 giga = GigaChat(
     credentials=GIGACHAT_CREDENTIALS,
     scope=GIGACHAT_SCOPE,
@@ -40,43 +35,9 @@ giga = GigaChat(
     timeout=60,
 )
 
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 site-text-audit-bot"
 }
-
-
-BLOCKED_PREFIXES = [
-    "https://www.qifa.ru/member",
-    "https://www.qifa.ru/shopping-cart",
-    "https://www.qifa.ru/compare",
-    "https://www.qifa.ru/passport",
-    "https://www.qifa.ru/login",
-    "https://www.qifa.ru/logout"
-]
-
-
-BLOCKED_EXTENSIONS = (
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".webp",
-    ".svg",
-    ".ico",
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-    ".zip",
-    ".rar",
-    ".7z",
-    ".mp4",
-    ".mp3",
-    ".avi",
-    ".mov"
-)
 
 
 def clean_text(text: str) -> str:
@@ -85,45 +46,11 @@ def clean_text(text: str) -> str:
 
 
 def normalize_url(url: str) -> str:
-    parsed = urlparse(url)
-
-    scheme = parsed.scheme or "https"
-    netloc = parsed.netloc.lower()
-
-    if netloc == "qifa.ru":
-        netloc = "www.qifa.ru"
-
-    path = parsed.path.rstrip("/")
-    if not path:
-        path = "/"
-
-    return urlunparse((scheme, netloc, path, "", "", ""))
+    return url.split("#")[0].rstrip("/")
 
 
-def is_blocked_url(url: str) -> bool:
-    normalized = normalize_url(url)
-
-    if any(normalized.startswith(prefix) for prefix in BLOCKED_PREFIXES):
-        return True
-
-    path = urlparse(normalized).path.lower()
-
-    if path.endswith(BLOCKED_EXTENSIONS):
-        return True
-
-    return False
-
-
-def is_allowed_url(url: str, allowed_prefixes: list[str]) -> bool:
-    normalized = normalize_url(url)
-
-    if is_blocked_url(normalized):
-        return False
-
-    return any(
-        normalized.startswith(normalize_url(prefix).rstrip("/"))
-        for prefix in allowed_prefixes
-    )
+def same_domain(url: str, root_domain: str) -> bool:
+    return urlparse(url).netloc == root_domain
 
 
 def is_useful_text(text: str) -> bool:
@@ -133,39 +60,26 @@ def is_useful_text(text: str) -> bool:
     if " " not in text:
         return False
 
-    low = text.lower()
-
-    noise_fragments = [
+    bad_fragments = [
         "cookie",
         "javascript",
         "whatsapp",
         "telegram",
         "личный кабинет",
-        "избранное",
-        "корзина",
-        "сравнение",
         "войти",
         "регистрация",
-        "choose file",
-        "go to slide",
-        "previous slide",
-        "next slide"
     ]
 
-    if any(fragment in low for fragment in noise_fragments):
+    low = text.lower()
+    if any(x in low for x in bad_fragments):
         return False
 
     return True
 
 
 def extract_text_and_links(url: str):
-    response = requests.get(url, headers=HEADERS, timeout=25)
+    response = requests.get(url, headers=HEADERS, timeout=20)
     response.raise_for_status()
-
-    content_type = response.headers.get("content-type", "").lower()
-
-    if "text/html" not in content_type:
-        return [], []
 
     soup = BeautifulSoup(response.text, "html.parser")
 
@@ -173,7 +87,7 @@ def extract_text_and_links(url: str):
         tag.decompose()
 
     text_blocks = []
-    seen_texts = set()
+    seen = set()
     block_id = 1
 
     for el in soup.find_all(["h1", "h2", "h3", "h4", "p", "li", "span", "div"]):
@@ -182,10 +96,10 @@ def extract_text_and_links(url: str):
         if not is_useful_text(value):
             continue
 
-        if value in seen_texts:
+        if value in seen:
             continue
 
-        seen_texts.add(value)
+        seen.add(value)
 
         text_blocks.append({
             "block_id": block_id,
@@ -203,47 +117,27 @@ def extract_text_and_links(url: str):
         if not href:
             continue
 
-        if href.startswith(("mailto:", "tel:", "javascript:", "whatsapp:", "tg:")):
+        if href.startswith(("mailto:", "tel:", "javascript:")):
             continue
 
-        absolute = normalize_url(urljoin(url, href))
-        links.append(absolute)
+        links.append(urljoin(url, href))
 
     return text_blocks, links
 
 
-def load_modules():
-    if not MODULES_PATH.exists():
-        raise FileNotFoundError(f"modules.json not found: {MODULES_PATH}")
-
-    with open(MODULES_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def crawl_module(module: dict):
-    start_urls = [normalize_url(url) for url in module["start_urls"]]
-    allowed_prefixes = [
-        normalize_url(prefix)
-        for prefix in module["allowed_prefixes"]
-    ]
-
-    exact_urls_only = bool(module.get("exact_urls_only", False))
-    exact_urls = set(start_urls)
-
-    queue = list(start_urls)
+def crawl(start_url: str, max_pages: int):
+    root_domain = urlparse(start_url).netloc
+    queue = [normalize_url(start_url)]
     visited = set()
     pages = []
 
-    while queue:
+    while queue and len(visited) < max_pages:
         url = normalize_url(queue.pop(0))
 
         if url in visited:
             continue
 
-        if exact_urls_only and url not in exact_urls:
-            continue
-
-        if not is_allowed_url(url, allowed_prefixes):
+        if not same_domain(url, root_domain):
             continue
 
         try:
@@ -257,15 +151,10 @@ def crawl_module(module: dict):
 
             visited.add(url)
 
-            if not exact_urls_only:
-                for link in links:
-                    link = normalize_url(link)
-
-                    if link in visited:
-                        continue
-
-                    if is_allowed_url(link, allowed_prefixes):
-                        queue.append(link)
+            for link in links:
+                link = normalize_url(link)
+                if link not in visited and same_domain(link, root_domain):
+                    queue.append(link)
 
             time.sleep(0.5)
 
@@ -275,7 +164,6 @@ def crawl_module(module: dict):
                 "text_blocks": [],
                 "technical_error": str(e)
             })
-
             visited.add(url)
 
     return pages
@@ -283,24 +171,23 @@ def crawl_module(module: dict):
 
 def make_chunks(text_blocks, max_chars=4500):
     chunks = []
-    current_lines = []
+    current = []
     current_len = 0
 
     for block in text_blocks:
-        safe_text = block["text"].replace('"', "'")
-        line = f'BLOCK_ID={block["block_id"]}; TAG={block["tag"]}; TEXT="{safe_text}"'
+        line = f'BLOCK_ID={block["block_id"]}; TAG={block["tag"]}; TEXT="{block["text"]}"'
         line_len = len(line)
 
-        if current_lines and current_len + line_len > max_chars:
-            chunks.append("\n".join(current_lines))
-            current_lines = [line]
+        if current and current_len + line_len > max_chars:
+            chunks.append("\n".join(current))
+            current = [line]
             current_len = line_len
         else:
-            current_lines.append(line)
+            current.append(line)
             current_len += line_len
 
-    if current_lines:
-        chunks.append("\n".join(current_lines))
+    if current:
+        chunks.append("\n".join(current))
 
     return chunks
 
@@ -322,7 +209,7 @@ def check_chunk(url: str, chunk: str):
     prompt = f"""
 Ты профессиональный корректор и редактор русскоязычных сайтов.
 
-Нужно найти только реальные ошибки:
+Нужно найти ТОЛЬКО реальные ошибки:
 - орфографические
 - грамматические
 - пунктуационные
@@ -330,21 +217,18 @@ def check_chunk(url: str, chunk: str):
 - стилистические
 
 Не считай ошибками:
-- элементы меню
+- короткие элементы меню
 - названия категорий
 - отдельные слова
 - кнопки
-- отсутствие контекста
 - SEO-фразы без явной ошибки
-- технические артикулы
-- названия брендов
-- коды товаров
+- отсутствие контекста
 
-Каждая строка имеет формат:
+Каждая проверяемая строка имеет формат:
 BLOCK_ID=номер; TAG=html_тег; TEXT="текст"
 
-Верни строго JSON-массив.
-Без markdown, без комментариев, без текста до или после JSON.
+Верни СТРОГО JSON-массив.
+Без markdown, без пояснений, без текста до или после JSON.
 
 Формат:
 [
@@ -352,7 +236,7 @@ BLOCK_ID=номер; TAG=html_тег; TEXT="текст"
     "block_id": 1,
     "error_type": "орфография|грамматика|пунктуация|логика|стиль|другое",
     "fragment": "точная цитата с ошибкой",
-    "problem": "объяснение ошибки",
+    "problem": "объяснение, в чём ошибка",
     "suggestion": "исправленный вариант"
   }}
 ]
@@ -360,7 +244,7 @@ BLOCK_ID=номер; TAG=html_тег; TEXT="текст"
 Если ошибок нет, верни:
 []
 
-URL:
+URL страницы:
 {url}
 
 Текст:
@@ -369,12 +253,11 @@ URL:
 
     response = giga.chat(prompt)
     content = response.choices[0].message.content.strip()
-
     return extract_json_array(content)
 
 
-def run_audit(module_id: str, module: dict):
-    pages = crawl_module(module)
+def run_audit(start_url: str, max_pages: int):
+    pages = crawl(start_url, max_pages)
     rows = []
 
     for page in pages:
@@ -382,7 +265,6 @@ def run_audit(module_id: str, module: dict):
 
         if page["technical_error"]:
             rows.append({
-                "module": module_id,
                 "url": url,
                 "block_id": "",
                 "html_tag": "",
@@ -405,7 +287,6 @@ def run_audit(module_id: str, module: dict):
                 issues = check_chunk(url, chunk)
             except Exception as e:
                 rows.append({
-                    "module": module_id,
                     "url": url,
                     "block_id": "",
                     "html_tag": "",
@@ -421,7 +302,6 @@ def run_audit(module_id: str, module: dict):
                 block = block_map.get(block_id, {})
 
                 rows.append({
-                    "module": module_id,
                     "url": url,
                     "block_id": block_id,
                     "html_tag": block.get("tag", ""),
@@ -434,18 +314,17 @@ def run_audit(module_id: str, module: dict):
     return rows, pages
 
 
-def save_report(module_id: str, rows: list):
-    REPORTS_DIR.mkdir(exist_ok=True)
-
+def save_report(start_url: str, rows: list, pages: list):
+    domain = urlparse(start_url).netloc.replace(".", "_")
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    xlsx_path = REPORTS_DIR / f"site_audit_qifa_{module_id}_{timestamp}.xlsx"
+
+    xlsx_path = BASE_DIR / f"site_audit_{domain}_{timestamp}.xlsx"
 
     if rows:
-        df = pd.DataFrame(rows)
+        errors_df = pd.DataFrame(rows)
     else:
-        df = pd.DataFrame([{
-            "module": module_id,
-            "url": "",
+        errors_df = pd.DataFrame([{
+            "url": start_url,
             "block_id": "",
             "html_tag": "",
             "fragment": "",
@@ -454,36 +333,36 @@ def save_report(module_id: str, rows: list):
             "suggestion": ""
         }])
 
+    pages_df = pd.DataFrame([
+        {
+            "url": page["url"],
+            "text_blocks_found": len(page["text_blocks"]),
+            "technical_error": page["technical_error"]
+        }
+        for page in pages
+    ])
+
     with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Ошибки", index=False)
+        errors_df.to_excel(writer, sheet_name="Ошибки", index=False)
 
     return xlsx_path
 
 
 def main():
     try:
+        start_url = "https://www.qifa.ru"
+
         if len(sys.argv) < 2:
-            raise Exception("Не указан модуль. Пример: python task.py home")
+            raise Exception("Не указано количество страниц")
 
-        module_id = sys.argv[1]
+        max_pages = int(sys.argv[1])
 
-        modules = load_modules()
-
-        if module_id not in modules:
-            raise Exception(
-                f"Неизвестный модуль: {module_id}. "
-                f"Доступные модули: {', '.join(modules.keys())}"
-            )
-
-        module = modules[module_id]
-
-        rows, pages = run_audit(module_id, module)
-        xlsx_path = save_report(module_id, rows)
+        rows, pages = run_audit(start_url, max_pages)
+        xlsx_path = save_report(start_url, rows, pages)
 
         print(json.dumps({
             "ok": True,
-            "module": module_id,
-            "module_name": module.get("name", module_id),
+            "site": start_url,
             "pages_checked": len(pages),
             "issues_found": len(rows),
             "xlsx": str(xlsx_path)
@@ -494,7 +373,3 @@ def main():
             "ok": False,
             "error": str(e)
         }, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()
